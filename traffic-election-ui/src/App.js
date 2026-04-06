@@ -7,13 +7,8 @@ const POSITIONS = [
     { x: 250, y: 550 }, { x: 150, y: 300 }
 ];
 
-// Custom colors assigned to each Node ID
 const SIGNAL_COLORS = { 
-    1: "#208407", // Green
-    2: "#b50e0e", // Red
-    3: "#0d00ff", // Blue
-    4: "#FF8C00", // Orange
-    5: "#de4c7f"  // Pink
+    1: "#208407", 2: "#b50e0e", 3: "#0d00ff", 4: "#FF8C00", 5: "#de4c7f" 
 };
 
 export default function App() {
@@ -81,34 +76,28 @@ export default function App() {
             <h1 className="arcade-title">TRAFFIC CONTROL SYSTEM</h1>
 
             <svg width="800" height="600" viewBox="0 0 800 700" style={{ flex: 1 }}>
-                {/* Dotted lines between nodes */}
+                {/* Dotted lines */}
                 {POSITIONS.map((p, i) => POSITIONS.map((p2, j) => i !== j && (
                     <line key={`${i}-${j}`} x1={p.x} y1={p.y} x2={p2.x} y2={p2.y} stroke="#333" strokeWidth="2" strokeDasharray="10,5" opacity="0.4" />
                 )))}
 
-                {/* Transmissions - Dynamic Colors based on Sender ID */}
+                {/* Transmissions */}
                 {Object.keys(nodes).map(id => {
                     const tx = nodes[id].transmission;
                     if (!tx) return null;
                     const start = POSITIONS[id - 1], end = POSITIONS[tx.to - 1];
-                    
-                    // Pick the color assigned to the sending node
                     const dynamicColor = SIGNAL_COLORS[id] || "#bc3fde";
 
                     return (
                         <g key={`tx-${id}`}>
-                            {/* The Signal Ball */}
                             <circle r="10" fill={dynamicColor} style={{ filter: `drop-shadow(0 0 5px ${dynamicColor})` }}>
                                 <animateMotion dur="0.6s" repeatCount="indefinite" path={`M ${start.x} ${start.y} L ${end.x} ${end.y}`} />
                             </circle>
-                            
-                            {/* The Signal Text */}
                             <text fontSize="11" fill={dynamicColor} fontFamily="'Press Start 2P'" style={{ fontWeight: 'bold' }}>
                                 <textPath href={`#p-${id}-${tx.to}`} startOffset="50%" textAnchor="middle">
                                     {tx.type}
                                 </textPath>
                             </text>
-                            
                             <path id={`p-${id}-${tx.to}`} d={`M ${start.x} ${start.y} L ${end.x} ${end.y}`} fill="none" />
                         </g>
                     );
@@ -121,6 +110,16 @@ export default function App() {
 
                     return (
                         <g key={id} transform={`translate(${pos.x}, ${pos.y})`}>
+                            {/* Grid Alert Message Box (Visible if node is Coordinator and has an alert) */}
+                            {isCoord && node.alert && (
+                                <g transform="translate(45, -40)">
+                                    <rect width="200" height="60" rx="5" fill="#111" stroke="white" strokeWidth="2" opacity="0.9" />
+                                    <text x="10" y="25" fill="#bc3fde" fontSize="8" fontFamily="'Press Start 2P'">ALERT:</text>
+                                    <text x="10" y="45" fill="#ffff00" fontSize="7" fontFamily="'Press Start 2P'">{node.alert}</text>
+                                </g>
+                            )}
+
+                            {/* Node Chassis */}
                             <rect x="-30" y="-55" width="60" height="110" 
                                 fill={isCoord ? "#bc3fde" : "#111"} 
                                 rx="8" 
