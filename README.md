@@ -78,9 +78,4 @@ npm start
 
 ## 📊 System Architecture
 
-
-
-[Image of client server architecture]
-
-
 The system operates on a **Request-Response Polling Architecture**. The backend maintains the "Truth" of the distributed system, while the React frontend polls the `/status` endpoint every 500ms to render the current "Frame" of the election process.
