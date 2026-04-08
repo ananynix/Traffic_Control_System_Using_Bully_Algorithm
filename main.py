@@ -5,16 +5,20 @@ import asyncio
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+# Location mapping for Mumbai
+LOCATIONS = {1: "Andheri", 2: "Vile Parle", 3: "Juhu", 4: "D.N. Nagar", 5: "Bandra"}
+
 class Node:
     def __init__(self, node_id):
         self.id = node_id
+        self.location = LOCATIONS[node_id]
         self.is_alive = True
         self.is_coordinator = False
         self.current_transmission = None
-        self.alert_msg = "" # Side alert box message for the UI
+        self.alert_msg = ""
+        self.police_status = "IDLE" # IDLE, DISPATCHED, RETURNING
 
 nodes = {i: Node(i) for i in range(1, 6)}
-# Global to track if a monitoring loop is already running
 monitoring_node_id = None
 
 @app.get("/status")
@@ -24,7 +28,9 @@ def get_status():
             "alive": n.is_alive, 
             "coordinator": n.is_coordinator, 
             "transmission": n.current_transmission,
-            "alert": n.alert_msg
+            "alert": n.alert_msg,
+            "location": n.location,
+            "police": n.police_status
         } for id, n in nodes.items()
     }
 
@@ -34,12 +40,20 @@ def kill_node(node_id: int):
     nodes[node_id].is_coordinator = False
     nodes[node_id].current_transmission = None
     nodes[node_id].alert_msg = ""
+    # Police Server Detects Fault -> Dispatch Officer
+    nodes[node_id].police_status = "DISPATCHED"
     return {"status": "killed"}
+
+async def handle_police_return(node_id):
+    """Background task to handle the cop running off-screen"""
+    nodes[node_id].police_status = "RETURNING"
+    await asyncio.sleep(3) # Wait for animation to finish
+    nodes[node_id].police_status = "IDLE"
 
 @app.post("/recover/{node_id}")
 def recover_node(node_id: int, background_tasks: BackgroundTasks):
     nodes[node_id].is_alive = True
-    # If a high ID recovers, it challenges the current leader
+    background_tasks.add_task(handle_police_return, node_id)
     background_tasks.add_task(run_bully, node_id, background_tasks)
     return {"status": "recovered"}
 
@@ -64,28 +78,31 @@ async def monitor_system(coord_id):
         while nodes[coord_id].is_coordinator and nodes[coord_id].is_alive:
             for target_id, node in nodes.items():
                 if target_id != coord_id and not node.is_alive:
-                    # Stage 1: Initial Detection
-                    nodes[coord_id].alert_msg = f"FAULT AT ID:{target_id}!"
-                    await asyncio.sleep(3)
-                    
-                    # Stage 2: External Communication
-                    nodes[coord_id].alert_msg = "SYNCING WITH ELECTRIC GRID..."
+                    # Stage 1: Detection (4 Seconds)
+                    nodes[coord_id].alert_msg = f"FAULT AT {node.location.upper()}!"
                     await asyncio.sleep(4)
                     
-                    # Stage 3: Remote Reboot Command
-                    nodes[coord_id].alert_msg = "INITIATING REMOTE REBOOT..."
-                    await asyncio.sleep(5)
+                    # Stage 2: Grid Sync (6 Seconds)
+                    nodes[coord_id].alert_msg = "SYNCING WITH ELECTRIC GRID..."
+                    await asyncio.sleep(6)
                     
-                    # Final Act: Reinstate
+                    # Stage 3: Remote Reboot (8 Seconds) - Total > 15s
+                    nodes[coord_id].alert_msg = "INITIATING REMOTE REBOOT..."
+                    await asyncio.sleep(8)
+                    
+                    # Final Act: Reinstate & Recall Police
                     node.is_alive = True
-                    nodes[coord_id].alert_msg = f"ID:{target_id} ONLINE!"
+                    nodes[coord_id].alert_msg = f"{node.location.upper()} ONLINE!"
+                    
+                    # Send police back
+                    node.police_status = "RETURNING"
                     await asyncio.sleep(3)
+                    node.police_status = "IDLE"
                     nodes[coord_id].alert_msg = ""
                     
-            await asyncio.sleep(1) # Heartbeat interval
+            await asyncio.sleep(1)
             
     except asyncio.CancelledError:
-        # This part runs when you press CTRL+C
         print(f"Monitor task for Node {coord_id} was cancelled safely.")
     finally:
         if monitoring_node_id == coord_id:
@@ -110,7 +127,6 @@ async def run_bully(starter_id, background_tasks: BackgroundTasks):
             return
 
     if not any_higher_alive:
-        # I am the Winner
         for id, n in nodes.items():
             n.is_coordinator = (id == starter_id)
             if id != starter_id and n.is_alive:
@@ -119,6 +135,4 @@ async def run_bully(starter_id, background_tasks: BackgroundTasks):
         
         await asyncio.sleep(1.5)
         nodes[starter_id].current_transmission = None
-        
-        # Start the Health Monitor for the new Coordinator
         background_tasks.add_task(monitor_system, starter_id)
